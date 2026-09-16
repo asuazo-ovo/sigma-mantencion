@@ -32,6 +32,15 @@ class BitacoraMiddleware:
             if not m.get("more_body"):
                 break
         hdr = {k.decode().lower(): v.decode(errors="replace") for k, v in scope.get("headers", [])}
+        if hdr.get("x-sigma-ui") == "1":  # el propio frontend: no es una integración
+            it0 = iter(mensajes)
+
+            async def replay0():
+                try:
+                    return next(it0)
+                except StopIteration:
+                    return await receive()
+            return await self.app(scope, replay0, send)
         origen = (hdr.get("x-forwarded-for", "").split(",")[0].strip()
                   or (scope.get("client") or ("?", 0))[0])
         agente = hdr.get("user-agent", "")

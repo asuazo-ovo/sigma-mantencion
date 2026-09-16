@@ -4,33 +4,110 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SIGMA Mantención · Minera Cerro Sauce</title>
-<style>
-  :root { --azul: #1F4E5F; --cobre: #E08A1E; --rojo: #C0392B; --gris: #F4F6F7; --texto: #1c2a30; }
-  body { margin: 0; font-family: Segoe UI, system-ui, sans-serif; background: var(--gris); color: var(--texto); }
-  header { background: var(--azul); color: #fff; padding: 14px 24px; display: flex; align-items: center; gap: 14px; }
-  header b { font-size: 20px; letter-spacing: .5px; }
-  header span { opacity: .8; font-size: 14px; }
-  main { max-width: 900px; margin: 40px auto; padding: 0 16px; }
-  .card { background: #fff; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 16px; }
-  h1 { margin: 0 0 8px; color: var(--azul); font-size: 22px; }
-  a { color: var(--azul); }
-  code { background: var(--gris); padding: 2px 6px; border-radius: 4px; }
-  .pie { font-size: 12px; color: #667; margin-top: 24px; }
-</style>
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231F4E5F'/%3E%3Cpath d='M8 22 L16 9 L24 22 Z' fill='%23E08A1E'/%3E%3C/svg%3E">
 </head>
 <body>
-<header><b>SIGMA Mantención</b><span>Minera Cerro Sauce · etapa 1 (backend)</span></header>
-<main>
-  <div class="card">
-    <h1>El backend está arriba. El frontend llega en la etapa 2.</h1>
-    <p>Mientras tanto, las tres caras del sistema ya responden:</p>
-    <ul>
-      <li>API REST: <a href="/api/docs">/api/docs</a> · por ejemplo <a href="/api/ordenes?area=Chancado&mes=2026-06">/api/ordenes?area=Chancado&amp;mes=2026-06</a> y <a href="/api/resumen">/api/resumen</a></li>
-      <li>Servidor MCP: <code>POST /mcp</code> (streamable HTTP)</li>
-      <li>Bitácora de integraciones: <a href="/api/integraciones">/api/integraciones</a></li>
-    </ul>
-  </div>
-  <p class="pie">Datos ficticios para capacitación · OVO Consulting · Copilot para Profesionales</p>
+<header class="top">
+  <a class="marca" href="#/tablero">
+    <svg width="34" height="34" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="6" fill="#1F4E5F"/><path d="M8 22 L16 9 L24 22 Z" fill="#E08A1E"/></svg>
+    <span><b>SIGMA</b> Mantención<small>Minera Cerro Sauce</small></span>
+  </a>
+  <nav>
+    <a href="#/tablero" data-ruta="tablero">Tablero</a>
+    <a href="#/ordenes" data-ruta="ordenes">Órdenes de trabajo</a>
+    <a href="#/equipos" data-ruta="equipos">Equipos</a>
+    <a href="#/integraciones" data-ruta="integraciones">Integraciones <span id="pulso" class="pulso" title="llamadas recientes"></span></a>
+  </nav>
+  <div class="usuario"><span class="avatar">RA</span><span><b>Rodrigo Aliaga</b><small>Jefe de Mantención</small></span></div>
+</header>
+
+<main id="app">
+  <!-- TABLERO -->
+  <section id="v-tablero" class="vista">
+    <div class="titulo"><h1>Tablero de mantención</h1><div class="sub">Detenciones no programadas · procedimiento OP-PR-014 · umbral de alerta <b>40 h/mes</b> por área</div></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="fila">
+      <div class="card grande">
+        <div class="card-h"><h2>Horas de detención por mes</h2>
+          <select id="sel-area-graf" class="sel"></select></div>
+        <div id="grafico" class="grafico"></div>
+        <div class="leyenda"><span><i class="sw ok"></i>bajo el umbral</span><span><i class="sw alerta"></i>sobre 40 h</span><span><i class="sw linea"></i>umbral OP-PR-014 §6</span></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>Pendientes de repuesto</h2></div>
+        <div id="pendientes"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>Áreas · <span id="mes-tabla"></span></h2><select id="sel-mes-tabla" class="sel"></select></div>
+      <table class="tabla" id="tabla-areas"></table>
+    </div>
+  </section>
+
+  <!-- ÓRDENES -->
+  <section id="v-ordenes" class="vista">
+    <div class="titulo"><h1>Órdenes de trabajo</h1><div class="sub" id="ot-resumen"></div></div>
+    <div class="card">
+      <div class="filtros">
+        <select id="f-area" class="sel"><option value="">Todas las áreas</option></select>
+        <select id="f-mes" class="sel"><option value="">Todos los meses</option></select>
+        <select id="f-tipo" class="sel"><option value="">Todos los tipos</option><option>Correctiva</option><option>Correctiva menor</option><option>Preventiva</option></select>
+        <select id="f-estado" class="sel"><option value="">Todos los estados</option><option>Cerrada</option><option>Pendiente de repuesto</option></select>
+        <select id="f-contratista" class="sel"><option value="">Todos los contratistas</option></select>
+        <input id="f-q" class="sel" placeholder="Buscar texto, equipo, id…">
+        <button id="f-limpiar" class="btn sec">Limpiar</button>
+      </div>
+      <table class="tabla" id="tabla-ot"></table>
+      <div class="totales" id="ot-totales"></div>
+    </div>
+  </section>
+
+  <!-- EQUIPOS -->
+  <section id="v-equipos" class="vista">
+    <div class="titulo"><h1>Historial por equipo</h1><div class="sub">Cronología de intervenciones · una OT por fila de la planilla de detenciones</div></div>
+    <div class="fila">
+      <div class="card">
+        <div class="card-h"><h2>Equipos</h2><input id="eq-buscar" class="sel" placeholder="Filtrar…"></div>
+        <ul class="lista" id="lista-equipos"></ul>
+      </div>
+      <div class="card grande">
+        <div class="card-h"><h2 id="eq-titulo">—</h2><span class="chip" id="eq-total"></span></div>
+        <ol class="linea-tiempo" id="linea-tiempo"></ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- INTEGRACIONES -->
+  <section id="v-integraciones" class="vista">
+    <div class="titulo"><h1>Integraciones</h1><div class="sub">Llamadas que llegan al sistema desde afuera, en vivo · <span class="chip mcp">MCP</span> conector federado de Copilot · <span class="chip api">API</span> REST</div></div>
+    <div class="fila">
+      <div class="card grande">
+        <div class="card-h"><h2>Bitácora en vivo</h2>
+          <div class="acciones"><label class="check"><input type="checkbox" id="int-pausa"> pausar</label><button id="int-limpiar" class="btn sec">Vaciar vista</button></div></div>
+        <table class="tabla bitacora" id="tabla-int"><thead><tr><th>Hora</th><th>Canal</th><th>Origen</th><th>Método</th><th>Detalle</th><th>Estado</th><th>ms</th></tr></thead><tbody></tbody></table>
+        <div class="vacio" id="int-vacio">Esperando llamadas… pregúntale algo a Copilot sobre SIGMA.</div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>Microsoft 365</h2></div>
+        <div id="m365"></div>
+        <div class="card-h" style="margin-top:22px"><h2>Demo</h2></div>
+        <p class="ayuda">Vuelve la base al estado inicial: 198 OT, la OT-2026-0166 pendiente de repuesto, bitácora vacía.</p>
+        <button id="btn-reset" class="btn peligro">Restablecer demo</button>
+        <div id="admin-msg" class="ayuda"></div>
+      </div>
+    </div>
+  </section>
 </main>
+
+<!-- DETALLE (panel lateral) -->
+<aside id="panel" class="panel" aria-hidden="true">
+  <div class="panel-h"><h2 id="p-titulo">—</h2><button id="p-cerrar" class="x" aria-label="Cerrar">×</button></div>
+  <div id="p-cuerpo"></div>
+</aside>
+<div id="velo" class="velo"></div>
+
+<footer class="pie">Datos ficticios para capacitación · Minera Cerro Sauce no existe · OVO Consulting · Copilot para Profesionales</footer>
+<script src="app.js"></script>
 </body>
 </html>
