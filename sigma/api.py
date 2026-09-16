@@ -69,3 +69,10 @@ def sincronizar(x_demo_key: str | None = Header(default=None)):
 @router.get("/admin/estado-m365")
 def estado_m365():
     return m365_sync.estado()
+
+
+@router.get("/admin/verificar-m365/{id}")
+def verificar_m365(id: str, clave: str = "", x_demo_key: str | None = Header(default=None)):
+    """¿Existe la OT en el índice de Microsoft 365? Acepta la clave por cabecera o por `?clave=` (para abrirlo en el navegador)."""
+    _clave_ok(x_demo_key or clave or None)
+    return m365_sync.verificar_item(id)

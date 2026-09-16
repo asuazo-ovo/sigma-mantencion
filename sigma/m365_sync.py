@@ -38,6 +38,25 @@ def _progreso(**kw) -> None:
     _set_meta("sync_progreso", _json.dumps(kw, ensure_ascii=False))
 
 
+def verificar_item(id_: str) -> dict:
+    """Pregunta directamente a Microsoft Graph si un ítem existe en la conexión (GET externalItem).
+    Sirve para distinguir «no se envió» de «aún no está indexado para búsqueda»."""
+    c = _cfg()
+    st = estado()
+    if not st["configurado"]:
+        return {"ok": False, "error": "Faltan variables de entorno", "faltan": st["faltan"]}
+    tk = _token(c)
+    item = id_.replace("-", "").upper()
+    r = _call("GET", f"/external/connections/{c['M365_CONNECTION_ID']}/items/{item}", tk)
+    if r.status_code == 200:
+        j = r.json()
+        return {"ok": True, "existe": True, "item": item, "titulo": (j.get("properties") or {}).get("titulo"),
+                "nota": "El ítem está en Microsoft Graph. Si el Explorador de índices aún no lo muestra, es la indexación para búsqueda (minutos a ~1 h)."}
+    if r.status_code == 404:
+        return {"ok": True, "existe": False, "item": item, "nota": "El ítem no está en la conexión: no se envió o falló el PUT."}
+    return {"ok": False, "status": r.status_code, "detalle": r.text[:300]}
+
+
 def sincronizar_en_segundo_plano() -> dict:
     """Lanza la sincronización en un hilo y responde de inmediato; el frontend sigue el progreso en estado()."""
     import threading
