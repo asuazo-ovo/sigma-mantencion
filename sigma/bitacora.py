@@ -9,7 +9,7 @@ import time
 from . import db
 
 CANALES = {"/mcp": "mcp", "/api": "api"}
-IGNORAR = ("/api/integraciones",)  # el sondeo del frontend no se registra a sí mismo
+IGNORAR = ("/api/integraciones", "/api/admin/estado-m365", "/salud")  # sondeos y latidos no son integraciones
 
 
 class BitacoraMiddleware:

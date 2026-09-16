@@ -54,7 +54,9 @@ def sincronizar_en_segundo_plano() -> dict:
             r = sincronizar()
             _progreso(paso="listo" if r.get("ok") else "error", resultado=r,
                       mensaje=(f"{r.get('enviados', 0)} ítems enviados al índice de Microsoft 365" if r.get("ok")
-                               else f"Error en {r.get('paso', 'sincronización')}"))
+                               else (f"{r.get('enviados', 0)} enviados; falló {r['errores'][0]['id']} "
+                                     f"(HTTP {r['errores'][0]['status']}): {r['errores'][0]['detalle'][:120]}"
+                                     if r.get("errores") else f"Error en {r.get('paso', 'sincronización')}: {str(r.get('detalle', ''))[:160]}")))
         except Exception as e:  # noqa: BLE001
             _progreso(paso="error", mensaje=str(e)[:300])
         finally:
