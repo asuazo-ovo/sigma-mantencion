@@ -1,0 +1,6 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+mcp>=2.0
+msal>=1.28
+requests>=2.31
+openpyxl>=3.1

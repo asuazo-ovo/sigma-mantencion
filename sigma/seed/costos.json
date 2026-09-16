@@ -1,0 +1,32 @@
+[
+ {
+  "area": "Chancado",
+  "costo_hora_clp": 2400000,
+  "base": "Detiene toda la planta aguas abajo: producción perdida de concentrado + costo fijo de planta",
+  "vigencia": "01-01-2026 a 31-12-2026"
+ },
+ {
+  "area": "Molienda",
+  "costo_hora_clp": 1900000,
+  "base": "Producción perdida de concentrado + costo fijo de planta; el chancado puede acopiar",
+  "vigencia": "01-01-2026 a 31-12-2026"
+ },
+ {
+  "area": "Planta Concentradora",
+  "costo_hora_clp": 1600000,
+  "base": "Producción perdida de concentrado; molienda acopia pulpa hasta 3 h",
+  "vigencia": "01-01-2026 a 31-12-2026"
+ },
+ {
+  "area": "Mina",
+  "costo_hora_clp": 950000,
+  "base": "Costo fijo de flota y personal; la pila de acopio absorbe hasta 12 h",
+  "vigencia": "01-01-2026 a 31-12-2026"
+ },
+ {
+  "area": "Despacho",
+  "costo_hora_clp": 600000,
+  "base": "Costo de demora de embarque; no detiene producción",
+  "vigencia": "01-01-2026 a 31-12-2026"
+ }
+]

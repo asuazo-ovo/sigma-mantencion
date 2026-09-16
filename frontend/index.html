@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIGMA Mantención · Minera Cerro Sauce</title>
+<style>
+  :root { --azul: #1F4E5F; --cobre: #E08A1E; --rojo: #C0392B; --gris: #F4F6F7; --texto: #1c2a30; }
+  body { margin: 0; font-family: Segoe UI, system-ui, sans-serif; background: var(--gris); color: var(--texto); }
+  header { background: var(--azul); color: #fff; padding: 14px 24px; display: flex; align-items: center; gap: 14px; }
+  header b { font-size: 20px; letter-spacing: .5px; }
+  header span { opacity: .8; font-size: 14px; }
+  main { max-width: 900px; margin: 40px auto; padding: 0 16px; }
+  .card { background: #fff; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 16px; }
+  h1 { margin: 0 0 8px; color: var(--azul); font-size: 22px; }
+  a { color: var(--azul); }
+  code { background: var(--gris); padding: 2px 6px; border-radius: 4px; }
+  .pie { font-size: 12px; color: #667; margin-top: 24px; }
+</style>
+</head>
+<body>
+<header><b>SIGMA Mantención</b><span>Minera Cerro Sauce · etapa 1 (backend)</span></header>
+<main>
+  <div class="card">
+    <h1>El backend está arriba. El frontend llega en la etapa 2.</h1>
+    <p>Mientras tanto, las tres caras del sistema ya responden:</p>
+    <ul>
+      <li>API REST: <a href="/api/docs">/api/docs</a> · por ejemplo <a href="/api/ordenes?area=Chancado&mes=2026-06">/api/ordenes?area=Chancado&amp;mes=2026-06</a> y <a href="/api/resumen">/api/resumen</a></li>
+      <li>Servidor MCP: <code>POST /mcp</code> (streamable HTTP)</li>
+      <li>Bitácora de integraciones: <a href="/api/integraciones">/api/integraciones</a></li>
+    </ul>
+  </div>
+  <p class="pie">Datos ficticios para capacitación · OVO Consulting · Copilot para Profesionales</p>
+</main>
+</body>
+</html>

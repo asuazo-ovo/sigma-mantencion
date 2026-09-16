@@ -1,0 +1,145 @@
+"""Conector sincronizado de Microsoft 365 Copilot, desde el servidor: crea la conexión y el esquema si no
+existen y empuja cada orden de trabajo como ítem del índice (Microsoft Graph, permisos de APLICACIÓN).
+
+Variables de entorno (nunca en el código ni en el repo):
+  TENANT_ID, CLIENT_ID, CLIENT_SECRET   — la app de Entra con ExternalConnection/ExternalItem.ReadWrite.OwnedBy
+  M365_CONNECTION_ID                    — id de la conexión (3-32 alfanuméricos), p. ej. sigmamantencion
+Es el mismo flujo del script conector_cerrosauce.py de la cápsula TI-1, ahora disparado desde un botón."""
+from __future__ import annotations
+
+import os
+import time
+
+import requests
+
+from . import db
+
+GRAPH = "https://graph.microsoft.com/v1.0"
+
+
+def _cfg() -> dict:
+    return {k: os.environ.get(k, "") for k in ("TENANT_ID", "CLIENT_ID", "CLIENT_SECRET", "M365_CONNECTION_ID")}
+
+
+def estado() -> dict:
+    c = _cfg()
+    faltan = [k for k, v in c.items() if not v]
+    return {"configurado": not faltan, "faltan": faltan, "connection_id": c["M365_CONNECTION_ID"] or None,
+            "ultima_sincronizacion": _meta("ultima_sincronizacion")}
+
+
+def _meta(clave: str):
+    con = db.conectar()
+    try:
+        r = con.execute("SELECT valor FROM meta WHERE clave=?", (clave,)).fetchone()
+        return r[0] if r else None
+    finally:
+        con.close()
+
+
+def _set_meta(clave: str, valor: str) -> None:
+    con = db.conectar()
+    with con:
+        con.execute("INSERT OR REPLACE INTO meta VALUES (?,?)", (clave, valor))
+    con.close()
+
+
+def _token(c: dict) -> str:
+    import msal
+    app = msal.ConfidentialClientApplication(c["CLIENT_ID"], authority=f"https://login.microsoftonline.com/{c['TENANT_ID']}",
+                                             client_credential=c["CLIENT_SECRET"])
+    r = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+    if "access_token" not in r:
+        raise RuntimeError(f"Autenticación de aplicación fallida: {r.get('error_description')}")
+    return r["access_token"]
+
+
+def _call(method: str, path: str, tk: str, body=None) -> requests.Response:
+    r = requests.request(method, f"{GRAPH}{path}", json=body,
+                         headers={"Authorization": f"Bearer {tk}", "Content-Type": "application/json"}, timeout=60)
+    return r
+
+
+ESQUEMA = {
+    "baseType": "microsoft.graph.externalItem",
+    "properties": [
+        {"name": "titulo", "type": "String", "isSearchable": True, "isRetrievable": True, "labels": ["title"]},
+        {"name": "url", "type": "String", "isRetrievable": True, "labels": ["url"]},
+        {"name": "equipo", "type": "String", "isSearchable": True, "isQueryable": True, "isRetrievable": True},
+        {"name": "area", "type": "String", "isQueryable": True, "isRetrievable": True, "isRefinable": True},
+        {"name": "tipo", "type": "String", "isQueryable": True, "isRetrievable": True, "isRefinable": True},
+        {"name": "estado", "type": "String", "isQueryable": True, "isRetrievable": True, "isRefinable": True},
+        {"name": "contratista", "type": "String", "isQueryable": True, "isRetrievable": True},
+        {"name": "horas", "type": "Double", "isQueryable": True, "isRetrievable": True},
+        {"name": "costoRepuestosClp", "type": "Int64", "isQueryable": True, "isRetrievable": True},
+        {"name": "fecha", "type": "DateTime", "isQueryable": True, "isRetrievable": True, "labels": ["lastModifiedDateTime"]},
+    ],
+}
+
+
+def sincronizar() -> dict:
+    c = _cfg()
+    st = estado()
+    if not st["configurado"]:
+        return {"ok": False, "error": "Faltan variables de entorno", "faltan": st["faltan"]}
+    tk = _token(c)
+    cid = c["M365_CONNECTION_ID"]
+    pasos = []
+
+    r = _call("GET", f"/external/connections/{cid}", tk)
+    if r.status_code == 404:
+        r = _call("POST", "/external/connections", tk, {
+            "id": cid, "name": "SIGMA Mantención · Cerro Sauce",
+            "description": "Órdenes de trabajo del sistema de gestión de mantención de Minera Cerro Sauce.",
+            "configuration": {"authorizedAppIds": [c["CLIENT_ID"]]}})
+        if r.status_code >= 400:
+            return {"ok": False, "paso": "crear conexión", "status": r.status_code, "detalle": r.text[:500]}
+        pasos.append("conexión creada")
+        r = _call("PATCH", f"/external/connections/{cid}/schema", tk, ESQUEMA)
+        if r.status_code >= 400:
+            return {"ok": False, "paso": "esquema", "status": r.status_code, "detalle": r.text[:500]}
+        op = r.headers.get("Location")
+        for _ in range(40):  # hasta ~20 min
+            s = requests.get(op, headers={"Authorization": f"Bearer {tk}"}, timeout=30).json()
+            if s.get("status") in ("completed", "failed"):
+                break
+            time.sleep(30)
+        if s.get("status") != "completed":
+            return {"ok": False, "paso": "esquema", "detalle": s}
+        pasos.append("esquema provisionado")
+    elif r.status_code >= 400:
+        return {"ok": False, "paso": "leer conexión", "status": r.status_code, "detalle": r.text[:500]}
+
+    publica = os.environ.get("SIGMA_URL_PUBLICA", "http://127.0.0.1:8000")
+    enviados, errores = 0, []
+    for o in db.listar_ordenes(limite=5000):
+        texto = (f"Orden de trabajo {o['id']} del sistema SIGMA Mantención. Área: {o['area']}. Equipo: {o['equipo']}. "
+                 f"Tipo: {o['tipo']}. Estado: {o['estado']}. Fecha: {o['fecha'][:10]}. Duración: {o['horas']} horas. "
+                 f"Contratista: {o['contratista']}. Causa: {o.get('causa') or '-'}. Descripción: {o['descripcion']} "
+                 + (f"Nota: {o['nota']} " if o.get("nota") else "")
+                 + ("Generó registro de detención en la planilla de Operaciones." if o["detencion_registrada"]
+                    else "No generó registro de detención en la planilla de Operaciones."))
+        body = {
+            "acl": [{"type": "everyone", "value": c["TENANT_ID"], "accessType": "grant"}],
+            "properties": {
+                "titulo@odata.type": "String", "titulo": f"{o['id']} · {o['equipo']} · {o['tipo']}",
+                "url": f"{publica}/ot/{o['id']}",
+                "equipo@odata.type": "String", "equipo": o["equipo"], "area@odata.type": "String", "area": o["area"],
+                "tipo@odata.type": "String", "tipo": o["tipo"], "estado@odata.type": "String", "estado": o["estado"],
+                "contratista@odata.type": "String", "contratista": o["contratista"],
+                "horas": o["horas"], "costoRepuestosClp": o["costo_repuestos_clp"],
+                "fecha": o["fecha"] + ("Z" if len(o["fecha"]) == 19 else ""),
+            },
+            "content": {"value": texto, "type": "text"},
+        }
+        r = _call("PUT", f"/external/connections/{cid}/items/{o['id'].replace('-', '')}", tk, body)
+        if r.status_code >= 400:
+            errores.append({"id": o["id"], "status": r.status_code, "detalle": r.text[:200]})
+            if len(errores) > 5:
+                break
+        else:
+            enviados += 1
+    ahora = db.ahora()
+    _set_meta("ultima_sincronizacion", ahora)
+    db.registrar_integracion("api", "servidor", "sincronizar-m365", f"{enviados} ítems enviados", 200, 0, "SIGMA")
+    return {"ok": not errores, "pasos": pasos, "enviados": enviados, "errores": errores, "cuando": ahora}
