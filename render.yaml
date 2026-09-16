@@ -1,0 +1,26 @@
+# Despliegue en Render (plan B de alojamiento, cuenta GitHub asuazo-ovo).
+# Render lee este archivo al conectar el repo ("Blueprint") y crea el servicio con estas opciones.
+# Variables sensibles (TENANT_ID, CLIENT_ID, CLIENT_SECRET, M365_CONNECTION_ID, DEMO_KEY) se cargan a mano
+# en el panel de Render → Environment; nunca van aquí ni en el repo.
+services:
+  - type: web
+    name: sigma-mantencion
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn sigma.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /salud
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.10"
+      - key: SIGMA_DB
+        value: /tmp/sigma.db          # el plan gratuito no tiene disco persistente: la base se recrea del seed en cada arranque
+      - key: SIGMA_URL_PUBLICA
+        fromService:
+          type: web
+          name: sigma-mantencion
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: PERMITIR_ESCRITURA
+        value: "0"

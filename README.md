@@ -53,3 +53,11 @@ Abre `http://127.0.0.1:8000`. La base se crea en `data/sigma.db` al primer arran
 
 ---
 Datos ficticios. Minera Cerro Sauce no existe.
+
+## Despliegue (Render)
+
+`render.yaml` describe el servicio. En Render: **New → Blueprint** → elegir el repo → Apply. Después, en
+**Environment**, cargar a mano las variables sensibles. El plan gratuito no tiene disco: la base se recrea
+desde el seed en cada arranque (por eso `SIGMA_DB=/tmp/sigma.db`), lo que para una demo es una ventaja.
+El servicio se apaga tras unos minutos sin tráfico y tarda ~30 s en despertar: para grabar, mantenerlo
+despierto con un ping periódico a `/salud` (por ejemplo desde cron-job.org) o pasar al plan de pago.
