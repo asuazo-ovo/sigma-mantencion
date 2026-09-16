@@ -167,24 +167,40 @@
     if (!vistos.size) await sondear(true);
     timer = setInterval(() => sondear(false), 1500);
     $("#int-limpiar").onclick = () => { $("#tabla-int tbody").innerHTML = ""; $("#int-vacio").style.display = ""; };
-    const m = await api("/admin/estado-m365");
-    $("#m365").innerHTML = `<dl class="m365">
-      <dt>Conector sincronizado</dt><dd>${m.configurado ? `<span class="chip ok">configurado</span> · conexión <span class="id">${esc(m.connection_id)}</span>` : `<span class="chip">sin credenciales</span><small>faltan: ${esc(m.faltan.join(", "))}</small>`}</dd>
-      <dt>Última sincronización</dt><dd>${m.ultima_sincronizacion ? hora(m.ultima_sincronizacion) + " · " + fecha(m.ultima_sincronizacion) : "nunca"}</dd>
-      <dt>Conector federado (MCP)</dt><dd>endpoint <span class="id">${location.origin}/mcp</span><small>Copilot lo llama en vivo; cada llamada aparece en la bitácora.</small></dd></dl>
-      <button id="btn-sync" class="btn cobre" ${m.configurado ? "" : "disabled"} style="margin-top:10px">Sincronizar con Microsoft 365</button>`;
-    $("#btn-sync").onclick = () => admin("/admin/sincronizar-m365", "#btn-sync", r => r.ok ? `${r.enviados} ítems enviados al índice de Microsoft 365 (${hora(r.cuando)})${r.pasos.length ? " · " + r.pasos.join(", ") : ""}` : `Error en ${r.paso || "sincronización"}: ${JSON.stringify(r.detalle || r.errores || r.faltan)}`);
+    await pintarM365();
     $("#btn-reset").onclick = () => { if (confirm("¿Volver la base al estado inicial? Se pierden cambios y bitácora.")) admin("/admin/restablecer", "#btn-reset", r => { todas = []; vistos.clear(); ultimoN = 0; $("#tabla-int tbody").innerHTML = ""; return `Restablecido: ${r.ordenes} OT (${hora(r.restablecido)})`; }); };
   }
+  let timerSync = null;
+  async function pintarM365() {
+    const m = await api("/admin/estado-m365");
+    const p = m.progreso;
+    const estadoSync = m.en_curso ? `<span class="chip cobre">en curso</span> ${esc(p ? p.mensaje : "")}`
+      : p && p.paso === "listo" ? `<span class="chip ok">ok</span> ${esc(p.mensaje)} · ${hora(p.cuando)}`
+      : p && p.paso === "error" ? `<span class="chip alerta">error</span> ${esc(p.mensaje)}` : "";
+    $("#m365").innerHTML = `<dl class="m365">
+      <dt>Conector sincronizado</dt><dd>${m.configurado ? `<span class="chip ok">configurado</span> · conexión <span class="id">${esc(m.connection_id)}</span>` : `<span class="chip">sin credenciales</span><small>faltan: ${esc(m.faltan.join(", "))}</small>`}</dd>
+      <dt>Última sincronización</dt><dd>${m.ultima_sincronizacion ? hora(m.ultima_sincronizacion) + " · " + fecha(m.ultima_sincronizacion) : "nunca"}${estadoSync ? `<div style="margin-top:6px">${estadoSync}</div>` : ""}</dd>
+      <dt>Conector federado (MCP)</dt><dd>endpoint <span class="id">${location.origin}/mcp</span><small>Copilot lo llama en vivo; cada llamada aparece en la bitácora.</small></dd></dl>
+      <button id="btn-sync" class="btn cobre" ${m.configurado && !m.en_curso ? "" : "disabled"} style="margin-top:10px">${m.en_curso ? "Sincronizando…" : "Sincronizar con Microsoft 365"}</button>`;
+    $("#btn-sync").onclick = () => admin("/admin/sincronizar-m365", "#btn-sync", r => { seguirSync(); return r.ok ? r.mensaje : `Error: ${JSON.stringify(r.faltan || r.error)}`; });
+    if (m.en_curso) seguirSync();
+  }
+  function seguirSync() {
+    clearInterval(timerSync);
+    timerSync = setInterval(async () => { if (!$("#v-integraciones").classList.contains("activa")) return clearInterval(timerSync); const m = await api("/admin/estado-m365").catch(() => null); if (m && !m.en_curso) { clearInterval(timerSync); } await pintarM365(); }, 4000);
+  }
   let claveDemo = sessionStorage.getItem("demoKey") || "";
-  async function admin(path, btn, fmt) {
+  async function admin(path, btn, fmt, reintento) {
     const b = $(btn), msg = $("#admin-msg"); b.disabled = true; msg.textContent = "Trabajando…";
     try {
       const r = await api(path, { method: "POST", headers: claveDemo ? { "X-Demo-Key": claveDemo } : {} });
       msg.textContent = fmt(r);
     } catch (e) {
-      if (e.status === 401) { claveDemo = prompt("Clave de demo (X-Demo-Key):") || ""; sessionStorage.setItem("demoKey", claveDemo); msg.textContent = claveDemo ? "Clave guardada; vuelve a intentar." : "Cancelado."; }
-      else msg.textContent = "Error: " + (e.body || e.message);
+      if (e.status === 401 && !reintento) {
+        claveDemo = prompt("Clave de demo (X-Demo-Key):") || ""; sessionStorage.setItem("demoKey", claveDemo);
+        if (claveDemo) return admin(path, btn, fmt, true);
+        msg.textContent = "Cancelado.";
+      } else msg.textContent = e.status === 401 ? "Clave incorrecta." : "Error: " + (e.body || e.message);
     } finally { b.disabled = false; }
   }
 

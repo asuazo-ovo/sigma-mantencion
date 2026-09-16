@@ -63,7 +63,7 @@ def sincronizar(x_demo_key: str | None = Header(default=None)):
     """Empuja las órdenes al índice de Microsoft 365 (conector sincronizado). Requiere las credenciales de la
     app de Entra en variables de entorno; sin ellas responde 503 y explica qué falta."""
     _clave_ok(x_demo_key)
-    return m365_sync.sincronizar()
+    return m365_sync.sincronizar_en_segundo_plano()
 
 
 @router.get("/admin/estado-m365")

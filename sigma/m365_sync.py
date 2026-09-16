@@ -24,8 +24,44 @@ def _cfg() -> dict:
 def estado() -> dict:
     c = _cfg()
     faltan = [k for k, v in c.items() if not v]
+    import json as _json
+    progreso = _meta("sync_progreso")
     return {"configurado": not faltan, "faltan": faltan, "connection_id": c["M365_CONNECTION_ID"] or None,
-            "ultima_sincronizacion": _meta("ultima_sincronizacion")}
+            "ultima_sincronizacion": _meta("ultima_sincronizacion"),
+            "en_curso": _meta("sync_en_curso") == "1",
+            "progreso": _json.loads(progreso) if progreso else None}
+
+
+def _progreso(**kw) -> None:
+    import json as _json
+    kw.setdefault("cuando", db.ahora())
+    _set_meta("sync_progreso", _json.dumps(kw, ensure_ascii=False))
+
+
+def sincronizar_en_segundo_plano() -> dict:
+    """Lanza la sincronización en un hilo y responde de inmediato; el frontend sigue el progreso en estado()."""
+    import threading
+    if _meta("sync_en_curso") == "1":
+        return {"ok": True, "en_curso": True, "mensaje": "Ya hay una sincronización en curso."}
+    st = estado()
+    if not st["configurado"]:
+        return {"ok": False, "error": "Faltan variables de entorno", "faltan": st["faltan"]}
+    _set_meta("sync_en_curso", "1")
+    _progreso(paso="iniciando", mensaje="Autenticando la aplicación en Microsoft Entra…")
+
+    def correr():
+        try:
+            r = sincronizar()
+            _progreso(paso="listo" if r.get("ok") else "error", resultado=r,
+                      mensaje=(f"{r.get('enviados', 0)} ítems enviados al índice de Microsoft 365" if r.get("ok")
+                               else f"Error en {r.get('paso', 'sincronización')}"))
+        except Exception as e:  # noqa: BLE001
+            _progreso(paso="error", mensaje=str(e)[:300])
+        finally:
+            _set_meta("sync_en_curso", "0")
+
+    threading.Thread(target=correr, daemon=True).start()
+    return {"ok": True, "en_curso": True, "mensaje": "Sincronización iniciada."}
 
 
 def _meta(clave: str):
@@ -86,8 +122,10 @@ def sincronizar() -> dict:
     cid = c["M365_CONNECTION_ID"]
     pasos = []
 
+    _progreso(paso="conexion", mensaje=f"Verificando la conexión «{cid}» en Microsoft Graph…")
     r = _call("GET", f"/external/connections/{cid}", tk)
     if r.status_code == 404:
+        _progreso(paso="conexion", mensaje="Creando la conexión y registrando el esquema (Microsoft tarda 2–15 min)…")
         r = _call("POST", "/external/connections", tk, {
             "id": cid, "name": "SIGMA Mantención · Cerro Sauce",
             "description": "Órdenes de trabajo del sistema de gestión de mantención de Minera Cerro Sauce.",
@@ -112,7 +150,10 @@ def sincronizar() -> dict:
 
     publica = os.environ.get("SIGMA_URL_PUBLICA", "http://127.0.0.1:8000")
     enviados, errores = 0, []
-    for o in db.listar_ordenes(limite=5000):
+    ordenes = db.listar_ordenes(limite=5000)
+    for i, o in enumerate(ordenes):
+        if i % 20 == 0:
+            _progreso(paso="items", mensaje=f"Enviando órdenes al índice: {i} de {len(ordenes)}…")
         texto = (f"Orden de trabajo {o['id']} del sistema SIGMA Mantención. Área: {o['area']}. Equipo: {o['equipo']}. "
                  f"Tipo: {o['tipo']}. Estado: {o['estado']}. Fecha: {o['fecha'][:10]}. Duración: {o['horas']} horas. "
                  f"Contratista: {o['contratista']}. Causa: {o.get('causa') or '-'}. Descripción: {o['descripcion']} "
