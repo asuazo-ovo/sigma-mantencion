@@ -101,6 +101,7 @@ def list_work_orders(area: str = "", month: str = "", status: str = "", type: st
         "count": len(sel), "total_hours": round(sum(o["horas"] for o in sel), 2),
         "hours_with_downtime_record": round(sum(o["horas"] for o in con), 2),
         "hours_without_downtime_record": round(sum(o["horas"] for o in sin), 2),
+        "hours_by_type": {t: round(sum(o["horas"] for o in sel if o["tipo"] == t), 2) for t in sorted({o["tipo"] for o in sel})},
         "results": [_resultado(o) for o in sel[:100]],
     })
 

@@ -89,6 +89,8 @@ def main(a1: pathlib.Path) -> None:
     for mes in ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07"]:
         for area, equipos in EQUIPOS_PREVENTIVA.items():
             dia = rnd.randint(2, 27)
+            if area == "Chancado" and mes in ("2026-06", "2026-07"):
+                continue  # los meses plantados del caso se dejan limpios: solo lo que la planilla y la bitácora dicen
             ordenes.append({
                 "fecha": f"{mes}-{dia:02d}T09:00:00", "area": area, "equipo": rnd.choice(equipos),
                 "tipo": "Preventiva", "turno": "Día", "causa": "Programada",
